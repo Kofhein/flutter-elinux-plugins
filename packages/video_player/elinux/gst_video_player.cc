@@ -5,6 +5,7 @@
 #include "gst_video_player.h"
 
 #include <iostream>
+#include <chrono>
 
 GstVideoPlayer::GstVideoPlayer(
     const std::string& uri, std::unique_ptr<VideoPlayerStreamHandler> handler)
@@ -66,7 +67,7 @@ bool GstVideoPlayer::Play() {
     std::cerr << "Failed to change the state to PLAYING" << std::endl;
     return false;
   }
-  // GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(gst_.pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "pipeline");
+  GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(gst_.pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "pipeline");
   return true;
 }
 
@@ -190,7 +191,14 @@ const uint8_t* GstVideoPlayer::GetFrameBuffer() {
   }
 
   const uint32_t pixel_bytes = width_ * height_ * 4;
+  auto begin = std::chrono::high_resolution_clock::now();
   gst_buffer_extract(gst_.buffer, 0, pixels_.get(), pixel_bytes);
+  auto end = std::chrono::high_resolution_clock::now();
+
+  auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin);
+
+  std::cout << "Time measured: " << elapsed.count() * 1e-9 << " seconds" << std::endl;
+
   return reinterpret_cast<const uint8_t*>(pixels_.get());
 }
 
