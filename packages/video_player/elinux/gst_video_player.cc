@@ -224,7 +224,8 @@ const uint8_t* GstVideoPlayer::GetFrameBuffer() {
 bool GstVideoPlayer::CreatePipeline() {
   std::string converter {"videoconvert"};
   std::string capsStr {"video/x-raw,format=RGBA"};
-  auto vendor = std::getenv("GPU_VENDOR");
+  // auto vendor = std::getenv("GPU_VENDOR");
+  auto vendor = "Intel";
   if (vendor)
   {
     if ( strcmp(vendor, "Intel") == 0 ){
