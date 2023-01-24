@@ -34,6 +34,10 @@ GstVideoPlayer::GstVideoPlayer(
   GetVideoSize(width_, height_);
   pixels_.reset(new uint32_t[width_ * height_]);
 
+  // Sometimes live streams doesn't contain aspect ratio
+  // which leads to issue with playback picture
+  // CorrectAspectRatio();
+
   stream_handler_->OnNotifyInitialized();
 }
 
@@ -41,7 +45,6 @@ GstVideoPlayer::~GstVideoPlayer() {
   Stop();
   DestroyPipeline();
 }
-
 
 bool GstVideoPlayer::IsStreamUri(const std::string &uri) const
 {
@@ -207,6 +210,52 @@ int64_t GstVideoPlayer::GetCurrentPosition() {
   return position / GST_MSECOND;
 }
 
+void GstVideoPlayer::CorrectAspectRatio() {
+  auto* pad = gst_element_get_static_pad (gst_.caps_filter, "src");
+  auto* caps = gst_pad_get_current_caps(pad);
+  auto* structure = gst_caps_get_structure(caps, 0);
+
+  if (!structure) {
+    std::cerr << "Failed to get a structure to correct aspect ratio" << std::endl;
+    std::cerr << "Setting portrait aspect ratio" << std::endl;
+
+    auto* caps_portrait = gst_caps_from_string("video/x-raw(memory:DMABuf), format=RGBA, pixel-aspect-ratio=9/16");
+    g_object_set (G_OBJECT (gst_.caps_filter), "caps", caps_portrait, NULL);
+
+    return;
+  }
+
+  gint aspr_n, aspr_d;
+  if (!gst_structure_get_fraction(structure, "pixel-aspect-ratio", &aspr_n, &aspr_d))
+  {
+    std::cerr << "Failed to get aspect-ratio fraction" << std::endl;
+    return;
+  }
+
+  if ( aspr_n != 1 && aspr_d != 1)
+  {
+    gst_caps_unref (caps);
+    gst_object_unref (pad);
+    return;
+  }
+
+  if ( width_ > height_ ) {
+    aspr_n = 16; aspr_d = 9;
+  } else {
+    aspr_n = 9; aspr_d = 16;
+  }
+
+  GValue aspr {0};
+  memset(&aspr, 0, sizeof(GValue));
+  g_value_init(&aspr, GST_TYPE_FRACTION);
+  gst_value_set_fraction(&aspr, aspr_n, aspr_d);
+
+  gst_structure_set_value (structure, "pixel-aspect-ratio", &aspr);
+
+  gst_caps_unref (caps);
+  gst_object_unref (pad);
+}
+
 const uint8_t* GstVideoPlayer::GetFrameBuffer() {
   std::shared_lock<std::shared_mutex> lock(mutex_buffer_);
   if (!gst_.buffer) {
@@ -230,7 +279,10 @@ bool GstVideoPlayer::CreatePipeline() {
   {
     if ( strcmp(vendor, "Intel") == 0 ){
       converter = "vapostproc";
-      capsStr = "video/x-raw(memory:DMABuf),format=RGBA";
+      if (!is_stream_)
+        capsStr = "video/x-raw(memory:DMABuf),format=RGBA";
+      else
+        capsStr = "video/x-raw(memory:DMABuf), format=RGBA, pixel-aspect-ratio=9/16";
       // We need va plugin to be able to use DMABuf
       IncreasePluginRank("vah264dec");
       IncreasePluginRank("vah265dec");
@@ -255,10 +307,14 @@ bool GstVideoPlayer::CreatePipeline() {
     std::cerr << "Failed to create a source" << std::endl;
     return false;
   }
-
   gst_.video_convert = gst_element_factory_make(converter.c_str(), "videoconvert");
   if (!gst_.video_convert) {
     std::cerr << "Failed to create a videoconvert" << std::endl;
+    return false;
+  }
+  gst_.caps_filter = gst_element_factory_make("capsfilter", "filter");
+  if (!gst_.caps_filter) {
+    std::cerr << "Failed to create a capsfilter" << std::endl;
     return false;
   }
   gst_.video_sink = gst_element_factory_make("fakesink", "videosink");
@@ -283,18 +339,13 @@ bool GstVideoPlayer::CreatePipeline() {
   g_object_set(G_OBJECT(gst_.video_sink), "signal-handoffs", TRUE, NULL);
   g_signal_connect(G_OBJECT(gst_.video_sink), "handoff",
                    G_CALLBACK(HandoffHandler), this);
-  gst_bin_add_many(GST_BIN(gst_.output), gst_.video_convert, gst_.video_sink,
+  gst_bin_add_many(GST_BIN(gst_.output), gst_.video_convert, gst_.caps_filter, gst_.video_sink,
                    NULL);
 
   // Adds caps to the converter to convert the color format to RGBA.
   auto* caps = gst_caps_from_string(capsStr.c_str());
-  auto link_ok =
-      gst_element_link_filtered(gst_.video_convert, gst_.video_sink, caps);
-  gst_caps_unref(caps);
-  if (!link_ok) {
-    std::cerr << "Failed to link elements" << std::endl;
-    return false;
-  }
+  g_object_set (G_OBJECT (gst_.caps_filter), "caps", caps, NULL);
+  gst_element_link_many(gst_.video_convert, gst_.caps_filter, gst_.video_sink, NULL);
 
   auto* sinkpad = gst_element_get_static_pad(gst_.video_convert, "sink");
   auto* ghost_sinkpad = gst_ghost_pad_new("sink", sinkpad);
@@ -418,7 +469,6 @@ void GstVideoPlayer::HandoffHandler(GstElement* fakesink, GstBuffer* buf,
   auto* self = reinterpret_cast<GstVideoPlayer*>(user_data);
   auto* caps = gst_pad_get_current_caps(new_pad);
   auto* structure = gst_caps_get_structure(caps, 0);
-
   int width;
   int height;
   gst_structure_get_int(structure, "width", &width);

@@ -63,6 +63,8 @@ class _BumbleBeeRemoteVideoState extends State<_BumbleBeeRemoteVideo> {
       // 'https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_cropped_multilingual.webm',
       // 'rtp://127.0.0.1:5005',
       'http://sample.vodobox.net/skate_phantom_flex_4k/4k/skate_phantom_flex_4k_8288_2160p.m3u8',
+      // 'udp://127.0.0.1:22222',
+      // 'http://127.0.0.1:7777/test.m3u8',
       videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
     );
 

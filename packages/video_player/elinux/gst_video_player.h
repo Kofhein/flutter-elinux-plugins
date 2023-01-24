@@ -42,6 +42,7 @@ class GstVideoPlayer {
     GstElement* pipeline;
     GstElement* playbin;
     GstElement* video_convert;
+    GstElement* caps_filter;
     GstElement* video_sink;
     GstElement* output;
 
@@ -56,6 +57,7 @@ class GstVideoPlayer {
   std::string ParseUri(const std::string& uri);
   bool CreatePipeline();
   void IncreasePluginRank(const std::string & element);
+  void CorrectAspectRatio();
   void DestroyPipeline();
   void Preroll();
   void GetVideoSize(int32_t& width, int32_t& height);
