@@ -5,6 +5,7 @@
 #include "gst_video_player.h"
 
 #include <iostream>
+#include <unordered_map>
 
 GstVideoPlayer::GstVideoPlayer(
     const std::string& uri, std::unique_ptr<VideoPlayerStreamHandler> handler)
@@ -32,6 +33,7 @@ GstVideoPlayer::GstVideoPlayer(
 
   // Sets internal video size and buffier.
   GetVideoSize(width_, height_);
+
   pixels_.reset(new uint32_t[width_ * height_]);
 
   // Sometimes live streams doesn't contain aspect ratio
@@ -210,6 +212,51 @@ int64_t GstVideoPlayer::GetCurrentPosition() {
   return position / GST_MSECOND;
 }
 
+bool GstVideoPlayer::SetStreamDataFromUrl(const std::string &uri)
+{
+  std::size_t param_start_pos = uri.find_last_of('?');
+  if (param_start_pos == std::string::npos)
+  {
+    std::cerr << "Url doesn't contain any param" << std::endl;
+    return false;
+  }
+
+  std::size_t param_end_pos = uri.find('&',++param_start_pos);
+  std::unordered_map < std::string, std::string > params;
+  while ( param_end_pos != std::string::npos )
+  {
+    param_end_pos = uri.find('&',param_start_pos);
+    std::string p = uri.substr(param_start_pos, param_end_pos-param_start_pos);
+    std::size_t p_pos = p.find('=');
+    params.insert(std::make_pair<std::string, std::string>
+                    (p.substr(0,p_pos), p.substr(p_pos+1)));
+    param_start_pos = param_end_pos + 1;
+  }
+
+  if ( params.find("w") != params.end() )
+    width_ = std::stoi(params["w"]);
+  else
+    std::cerr << "WARNING: width wasn't provided!" << std::endl;
+
+  if ( params.find("h") != params.end() )
+    height_ = std::stoi(params["h"]);
+  else
+    std::cerr << "WARNING: height wasn't provided!" << std::endl;
+
+  if ( params.find("o") != params.end() )
+  {
+    if (params["o"] == "l")
+      aspect_ratio_ = "16/9";
+    else
+      aspect_ratio_ = "9/16";
+  }
+  else
+    std::cerr << "WARNING: orientation wasn't provided!" << std::endl;
+
+  return true;
+}
+
+
 void GstVideoPlayer::CorrectAspectRatio() {
   auto* pad = gst_element_get_static_pad (gst_.caps_filter, "src");
   auto* caps = gst_pad_get_current_caps(pad);
@@ -280,6 +327,14 @@ bool GstVideoPlayer::CreatePipeline() {
     if ( strcmp(vendor, "Intel") == 0 ){
       converter = "vapostproc";
       capsStr = "video/x-raw(memory:DMABuf),format=RGBA";
+
+      if (is_stream_ && SetStreamDataFromUrl(uri_))
+      {
+        capsStr = "video/x-raw(memory:DMABuf), format=RGBA";
+        capsStr += ", width=" + std::to_string(width_);
+        capsStr += ", height=" + std::to_string(height_);
+        capsStr += ", aspect-ratio=" + aspect_ratio_;
+      }
       // We need va plugin to be able to use DMABuf
       IncreasePluginRank("vah264dec");
       IncreasePluginRank("vah265dec");

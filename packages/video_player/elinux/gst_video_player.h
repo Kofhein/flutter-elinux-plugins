@@ -62,9 +62,11 @@ class GstVideoPlayer {
   void Preroll();
   void GetVideoSize(int32_t& width, int32_t& height);
   bool IsStreamUri(const std::string &uri) const;
+  bool SetStreamDataFromUrl(const std::string &uri);
 
   GstVideoElements gst_;
   std::string uri_;
+  std::string aspect_ratio_;
   std::unique_ptr<uint32_t> pixels_;
   int32_t width_;
   int32_t height_;
