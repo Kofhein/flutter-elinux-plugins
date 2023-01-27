@@ -279,10 +279,7 @@ bool GstVideoPlayer::CreatePipeline() {
   {
     if ( strcmp(vendor, "Intel") == 0 ){
       converter = "vapostproc";
-      if (!is_stream_)
-        capsStr = "video/x-raw(memory:DMABuf),format=RGBA";
-      else
-        capsStr = "video/x-raw(memory:DMABuf), format=RGBA, pixel-aspect-ratio=9/16";
+      capsStr = "video/x-raw(memory:DMABuf),format=RGBA";
       // We need va plugin to be able to use DMABuf
       IncreasePluginRank("vah264dec");
       IncreasePluginRank("vah265dec");
