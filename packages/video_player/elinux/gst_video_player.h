@@ -12,6 +12,7 @@
 #include <shared_mutex>
 #include <string>
 #include <regex>
+#include <vector>
 
 #include "video_player_stream_handler.h"
 
@@ -63,6 +64,7 @@ class GstVideoPlayer {
   void GetVideoSize(int32_t& width, int32_t& height);
   bool IsStreamUri(const std::string &uri) const;
   bool SetStreamDataFromUrl(const std::string &uri);
+  int NormalizeResolutionValue(const int res_val);
 
   GstVideoElements gst_;
   std::string uri_;
@@ -82,6 +84,7 @@ class GstVideoPlayer {
 
   static inline auto const stream_type_regex_ {std::regex("((?:rtp|rtmp|rtcp|rtsp|udp)://.*)", std::regex::icase)};
   static inline auto const stream_ext_regex_ {std::regex("((?:http|https)://.*(?:.m3u8|.flv))", std::regex::icase)};
+  const std::vector < int > resolution_values_ {1080,1920,2160,3480};
 };
 
 #endif  // PACKAGES_VIDEO_PLAYER_VIDEO_PLAYER_ELINUX_GST_VIDEO_PLAYER_H_

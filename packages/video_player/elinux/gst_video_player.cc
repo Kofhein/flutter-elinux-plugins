@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <unordered_map>
+#include <algorithm>
 
 GstVideoPlayer::GstVideoPlayer(
     const std::string& uri, std::unique_ptr<VideoPlayerStreamHandler> handler)
@@ -234,12 +235,12 @@ bool GstVideoPlayer::SetStreamDataFromUrl(const std::string &uri)
   }
 
   if ( params.find("w") != params.end() )
-    width_ = std::stoi(params["w"]);
+    width_ = NormalizeResolutionValue(std::stoi(params["w"]));
   else
     std::cerr << "WARNING: width wasn't provided!" << std::endl;
 
   if ( params.find("h") != params.end() )
-    height_ = std::stoi(params["h"]);
+    height_ = NormalizeResolutionValue(std::stoi(params["h"]));
   else
     std::cerr << "WARNING: height wasn't provided!" << std::endl;
 
@@ -256,6 +257,9 @@ bool GstVideoPlayer::SetStreamDataFromUrl(const std::string &uri)
   return true;
 }
 
+int GstVideoPlayer::NormalizeResolutionValue(const int res_val) {
+  return *(std::lower_bound(resolution_values_.begin(), resolution_values_.end(), res_val));
+}
 
 void GstVideoPlayer::CorrectAspectRatio() {
   auto* pad = gst_element_get_static_pad (gst_.caps_filter, "src");
