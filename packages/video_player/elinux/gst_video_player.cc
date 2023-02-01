@@ -337,7 +337,8 @@ bool GstVideoPlayer::CreatePipeline() {
         capsStr = "video/x-raw(memory:DMABuf), format=RGBA";
         capsStr += ", width=" + std::to_string(width_);
         capsStr += ", height=" + std::to_string(height_);
-        capsStr += ", aspect-ratio=" + aspect_ratio_;
+        if (!aspect_ratio_.empty())
+          capsStr += ", aspect-ratio=" + aspect_ratio_;
       }
       // We need va plugin to be able to use DMABuf
       IncreasePluginRank("vah264dec");
