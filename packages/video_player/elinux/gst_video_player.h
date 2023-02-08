@@ -57,6 +57,7 @@ class GstVideoPlayer {
                                           gpointer user_data);
   std::string ParseUri(const std::string& uri);
   bool CreatePipeline();
+  bool CheckPluginAvailability(const std::string & element);
   void IncreasePluginRank(const std::string & element);
   void CorrectAspectRatio();
   void DestroyPipeline();

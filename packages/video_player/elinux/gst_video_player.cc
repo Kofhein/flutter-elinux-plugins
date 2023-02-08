@@ -55,6 +55,11 @@ bool GstVideoPlayer::IsStreamUri(const std::string &uri) const
         || regex_match(uri, GstVideoPlayer::stream_ext_regex_);
 }
 
+bool GstVideoPlayer::CheckPluginAvailability(const std::string & element)
+{
+  return gst_element_factory_find (element.c_str()) ? true : false;
+}
+
 // Code to increase Gst plugin rank, should be used to force using particular plugin
 void GstVideoPlayer::IncreasePluginRank(const std::string & element)
 {
@@ -324,34 +329,27 @@ const uint8_t* GstVideoPlayer::GetFrameBuffer() {
 bool GstVideoPlayer::CreatePipeline() {
   std::string converter {"videoconvert"};
   std::string capsStr {"video/x-raw,format=RGBA"};
-  // auto vendor = std::getenv("GPU_VENDOR");
-  auto vendor = "Intel";
-  if (vendor)
-  {
-    if ( strcmp(vendor, "Intel") == 0 ){
-      converter = "vapostproc";
-      capsStr = "video/x-raw(memory:DMABuf),format=RGBA";
 
-      if (is_stream_ && SetStreamDataFromUrl(uri_))
-      {
-        capsStr = "video/x-raw, format=RGBA";
-        capsStr += ", width=" + std::to_string(width_);
-        capsStr += ", height=" + std::to_string(height_);
-        // if (!aspect_ratio_.empty())
-        capsStr += ", pixel-aspect-ratio=1/1";
-      }
-      // We need va plugin to be able to use DMABuf
-      IncreasePluginRank("vah264dec");
-      IncreasePluginRank("vah265dec");
-      IncreasePluginRank("vapostproc");
-      IncreasePluginRank("vadeinterlace");
-      IncreasePluginRank("vampeg2dec");
-      IncreasePluginRank("vavp8dec");
-      IncreasePluginRank("vavp9dec");
-    } else if ( strcmp(vendor, "Nvidia") == 0 ) {
-      // Might need additional cudadownload in pipe
-      converter = "cudaconvert";
+  if ( CheckPluginAvailability("vapostproc") ){
+    converter = "vapostproc";
+    capsStr = "video/x-raw(memory:DMABuf),format=RGBA";
+
+    if (is_stream_ && SetStreamDataFromUrl(uri_))
+    {
+      capsStr = "video/x-raw, format=RGBA";
+      capsStr += ", width=" + std::to_string(width_);
+      capsStr += ", height=" + std::to_string(height_);
+      // if (!aspect_ratio_.empty())
+      capsStr += ", pixel-aspect-ratio=1/1";
     }
+    // We need va plugin to be able to use DMABuf
+    IncreasePluginRank("vah264dec");
+    IncreasePluginRank("vah265dec");
+    IncreasePluginRank("vapostproc");
+    IncreasePluginRank("vadeinterlace");
+    IncreasePluginRank("vampeg2dec");
+    IncreasePluginRank("vavp8dec");
+    IncreasePluginRank("vavp9dec");
   }
 
   gst_.pipeline = gst_pipeline_new("pipeline");
