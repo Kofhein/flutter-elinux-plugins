@@ -15,7 +15,7 @@
 #include <unistd.h>
 
 #include <unordered_map>
-
+#include <iostream>
 #include "gst_video_player.h"
 #include "messages/messages.h"
 #include "video_player_stream_handler_impl.h"
@@ -60,7 +60,8 @@ class VideoPlayerPlugin : public flutter::Plugin {
         texture_registrar_(texture_registrar) {
     // Needs to call 'gst_init' that initializing the GStreamer library before
     // using it.
-    GstVideoPlayer::GstLibraryLoad();
+    std::cout << "Lib load" << std::endl;
+    // GstVideoPlayer::GstLibraryLoad();
   }
   virtual ~VideoPlayerPlugin() {
     for (auto itr = players_.begin(); itr != players_.end(); itr++) {
@@ -76,8 +77,9 @@ class VideoPlayerPlugin : public flutter::Plugin {
       texture_registrar_->UnregisterTexture(texture_id);
     }
     players_.clear();
+    std::cout << "Lib Unload" << std::endl;
 
-    GstVideoPlayer::GstLibraryUnload();
+    // GstVideoPlayer::GstLibraryUnload();
   }
 
  private:
