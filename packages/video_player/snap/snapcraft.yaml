@@ -148,6 +148,8 @@ environment:
   XDG_CONFIG_DIRS: $SNAP/etc/xdg
   # XKB config
   XKB_CONFIG_ROOT: $SNAP/usr/share/X11/xkb
+  # GStreamer plugins path
+  GST_PLUGIN_PATH: $SNAP/usr/lib/x86_64-linux-gnu/gstreamer-1.0
 
 # The `layout` ensures that files can be found by applications where they are expected by the toolkit or application.
 layout:
