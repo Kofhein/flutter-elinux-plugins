@@ -1,0 +1,164 @@
+name: test-elinux-player # you probably want to 'snapcraft register <name>'
+base: core22 # the base snap is the execution environment for this snap
+version: '0.1' # just for humans, typically '1.2+git' or '1.3.2'
+summary: Single-line elevator pitch for your amazing snap # 79 char long summary
+description: |
+  This is my-snap's description. You have a paragraph or two to tell the
+  most important story about your snap. Keep it under 100 words though,
+  we live in tweetspace and your description wants to look good in the snap
+  store.
+
+grade: devel # must be 'stable' to release into candidate/stable channels
+confinement: devmode # use 'strict' once you have the right plugs and slots
+architectures:
+  - build-on: amd64
+compression: xz
+
+package-repositories:
+  - type: apt
+    formats: [deb]
+    suites: [jammy]
+    components: [main]
+    key-id: E5C2AAFCB81F46BE1484A97197833212D4A3B83B
+    key-server: http://www.phidgets.com/gpgkey/pubring.gpg
+    url: http://www.phidgets.com/debian/
+
+plugs:
+  snapd:
+    interface: snapd-control
+    refresh-schedule: managed
+
+parts:
+  mesa-core22:
+    plugin: nil
+    stage-packages:
+      - libgl1-mesa-dri
+      - va-driver-all
+      - libegl1
+      - libgles2
+
+  flutter-git:
+    after: [ mesa-core22 ]
+    source: https://github.com/sony/flutter-elinux.git
+    source-commit: 19a1b05ea20675c36c705955c4148ad40b205161
+    plugin: nil
+    override-stage: |
+      snapcraftctl stage
+      flutter-elinux doctor
+    override-build: |
+      mkdir -p $CRAFT_PART_INSTALL/usr/bin
+      mkdir -p $CRAFT_PART_INSTALL/usr/libexec
+      cp -r $CRAFT_PART_SRC $CRAFT_PART_INSTALL/usr/libexec/flutter-elinux
+      ln -s $CRAFT_PART_INSTALL/usr/libexec/flutter-elinux/bin/flutter-elinux $CRAFT_PART_INSTALL/usr/bin/flutter-elinux
+    build-packages:
+      - clang
+      - cmake
+      - curl
+      - libstdc++-12-dev
+      - ninja-build
+      - unzip
+      - xz-utils
+      - zip
+    prime:
+      - -*
+
+  video_player_example:
+    after: [ flutter-git ]
+    source: .
+    plugin: nil
+    stage-packages:
+      # Flutter applications are based on GTK and libgl
+      - alsa-base
+      - alsa-utils
+      - ffmpeg
+      - libasound2
+      - libasound2-data
+      - libasound2-plugins
+      - libgl1
+      - libva-dev
+      - libgstreamermm-1.0-dev
+      - libgstreamer1.0-dev
+      - libgstreamer-plugins-base1.0-dev
+      - libgstreamer-plugins-bad1.0-dev
+      - libgstreamer-plugins-good1.0-dev
+      - gstreamer1.0-vaapi
+      - gstreamer1.0-libav
+      - gstreamer1.0-nice
+      - gstreamer1.0-plugins-bad
+      - gstreamer1.0-plugins-base
+      - gstreamer1.0-plugins-good
+      - gstreamer1.0-gl
+    build-environment:
+      - PATH: "$PATH:$CRAFT_PART_INSTALL/bin:$SNAPCRAFT_PART_INSTALL/libexec/snapcraft:$SNAP/libexec/snapcraft"
+    override-build: |
+      set -eux
+      flutter-elinux pub get
+      cd example
+      flutter-elinux build elinux -v
+      mkdir -p $CRAFT_PART_INSTALL/bin
+      cp -r build/elinux/*/release/bundle/* $CRAFT_PART_INSTALL/bin/
+
+  snap-local:
+    plugin: dump
+    source: snap/local
+    build-environment:
+      - PATH: "$PATH:$CRAFT_PART_INSTALL/bin:$SNAPCRAFT_PART_INSTALL/libexec/snapcraft:$SNAP/libexec/snapcraft"
+    override-build: |
+      # The plugs needed to run Wayland. (wayland-launch checks them, setup.sh connects them)
+      # You may add further plugs here if you want these options
+      PLUGS="opengl wayland"
+      sed --in-place "s/%PLUGS%/$PLUGS/g" $CRAFT_PART_BUILD/bin/wayland-launch
+      sed --in-place "s/%PLUGS%/$PLUGS/g" $CRAFT_PART_BUILD/bin/setup.sh
+      craftctl default
+    stage-packages:
+      - inotify-tools
+
+apps:
+ video-player-application:
+    command: bin/video_player_example -b $SNAP/bin
+    plugs:
+      - camera
+      - opengl
+      - wayland
+      - alsa
+      - network
+      - network-manager
+      - network-bind
+      - network-observe
+    command-chain:
+      - bin/wayland-launch
+    environment:
+      SNAP_TYPE: app
+      
+environment:
+  # This is one of four snippets that relate to providing the userspace graphics needed by your application.
+  #
+  # NOTE - I had to resort to hard-coding this path when logged from wayland-launch
+  # it was set to simply "/var/lib/iot-example-graphical/snap/graphics/dir", none of
+  # the other directories where added. The path used here is what is set when the
+  # core20 version of this snap is built & run.
+  LD_LIBRARY_PATH: /var/lib/snapd/lib/gl:/var/lib/snapd/lib/gl32:/var/lib/snapd/void:$SNAP/bin/lib:$SNAP/usr/lib:$SNAP/usr/lib/$CRAFT_ARCH_TRIPLET/:$SNAP/usr/lib/$CRAFT_ARCH_TRIPLET/blas:$SNAP/usr/lib/$CRAFT_ARCH_TRIPLET/lapack:$SNAP/usr/lib/$CRAFT_ARCH_TRIPLET/pulseaudio
+  LIBGL_DRIVERS_PATH: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET/dri
+  LIBVA_DRIVERS_PATH: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET/dri
+  __EGL_VENDOR_LIBRARY_DIRS: $SNAP/usr/share/glvnd/egl_vendor.d
+  # Other, generally useful environment settings...
+  # XDG config
+  XDG_CACHE_HOME:  $SNAP_USER_COMMON/.cache
+  XDG_CONFIG_HOME: $SNAP_USER_DATA/.config
+  XDG_CONFIG_DIRS: $SNAP/etc/xdg
+  # XKB config
+  XKB_CONFIG_ROOT: $SNAP/usr/share/X11/xkb
+
+# The `layout` ensures that files can be found by applications where they are expected by the toolkit or application.
+layout:
+  # This is one of four snippets that relate to providing the userspace graphics needed by your application.
+  # These paths (/usr/share/libdrm and /usr/share/drirc.d) are hardcoded in mesa.
+  /usr/share/libdrm:  # Needed by mesa-core22 on AMD GPUs
+    bind: $SNAP/usr/share/libdrm
+  /usr/share/drirc.d:  # Used by mesa-core22 for app specific workarounds
+    bind: $SNAP/usr/share/drirc.d
+  # Other, generally useful paths
+  /usr/share/fonts:
+    bind: $SNAP/usr/share/fonts
+  /usr/share/icons:
+    bind: $SNAP/usr/share/icons
