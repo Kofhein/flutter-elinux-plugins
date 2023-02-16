@@ -41,7 +41,7 @@ class GstVideoPlayer {
  private:
   struct GstVideoElements {
     GstElement* pipeline;
-    GstElement* playbin;
+    GstElement* video_src;
     GstElement* video_convert;
     GstElement* caps_filter;
     GstElement* video_sink;
@@ -77,6 +77,7 @@ class GstVideoPlayer {
   double playback_rate_ = 1.0;
   bool mute_ = false;
   bool is_stream_ = false;
+  bool is_camera_ = false;
   bool auto_repeat_ = false;
   bool is_completed_ = false;
   std::mutex mutex_event_completed_;
@@ -85,6 +86,7 @@ class GstVideoPlayer {
 
   static inline auto const stream_type_regex_ {std::regex("((?:rtp|rtmp|rtcp|rtsp|udp)://.*)", std::regex::icase)};
   static inline auto const stream_ext_regex_ {std::regex("((?:http|https)://.*(?:.m3u8|.flv))", std::regex::icase)};
+  static inline auto const camera_path_regex_ {std::regex("(/dev/video[0-9])", std::regex::icase)};
   const std::vector < int > resolution_values_ {1080,1920,2160,3480};
 };
 
