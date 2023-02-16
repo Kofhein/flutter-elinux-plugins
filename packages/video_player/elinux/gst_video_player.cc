@@ -12,16 +12,24 @@ GstVideoPlayer::GstVideoPlayer(
     const std::string& uri, std::unique_ptr<VideoPlayerStreamHandler> handler)
     : stream_handler_(std::move(handler)) {
   gst_.pipeline = nullptr;
-  gst_.playbin = nullptr;
+  gst_.video_src = nullptr;
   gst_.video_convert = nullptr;
   gst_.video_sink = nullptr;
   gst_.output = nullptr;
   gst_.bus = nullptr;
   gst_.buffer = nullptr;
 
-  uri_ = ParseUri(uri);
-
-  is_stream_ = IsStreamUri(uri_);
+  if (!regex_match(uri, GstVideoPlayer::camera_path_regex_))
+  {
+    uri_ = ParseUri(uri);
+    is_stream_ = IsStreamUri(uri_);
+  }
+  else
+  {
+    //camera handling
+    uri_ = uri;
+    is_stream_ = true;
+  }
 
   if (!CreatePipeline()) {
     std::cerr << "Failed to create a pipeline" << std::endl;
@@ -112,12 +120,12 @@ bool GstVideoPlayer::Stop() {
 }
 
 bool GstVideoPlayer::SetVolume(double volume) {
-  if (!gst_.playbin) {
+  if (!gst_.video_src) {
     return false;
   }
 
   volume_ = volume;
-  g_object_set(gst_.playbin, "volume", volume, NULL);
+  g_object_set(gst_.video_src, "volume", volume, NULL);
   return true;
 }
 
@@ -125,7 +133,7 @@ bool GstVideoPlayer::SetPlaybackRate(double rate) {
   if (is_stream_)
     return false;
 
-  if (!gst_.playbin) {
+  if (!gst_.video_src) {
     return false;
   }
 
@@ -150,7 +158,7 @@ bool GstVideoPlayer::SetPlaybackRate(double rate) {
 
   playback_rate_ = rate;
   mute_ = (rate < 0.5 || rate > 2);
-  g_object_set(gst_.playbin, "mute", mute_, NULL);
+  g_object_set(gst_.video_src, "mute", mute_, NULL);
 
   return true;
 }
@@ -329,7 +337,7 @@ const uint8_t* GstVideoPlayer::GetFrameBuffer() {
 bool GstVideoPlayer::CreatePipeline() {
   std::string converter {"videoconvert"};
   std::string capsStr {"video/x-raw,format=RGBA"};
-
+  std::string video_src {"playbin3"};
   if ( CheckPluginAvailability("vapostproc") ){
     converter = "vapostproc";
     capsStr = "video/x-raw(memory:DMABuf),format=RGBA";
@@ -351,14 +359,16 @@ bool GstVideoPlayer::CreatePipeline() {
     IncreasePluginRank("vavp8dec");
     IncreasePluginRank("vavp9dec");
   }
+  if (true)
+    video_src = "v4l2src";
 
   gst_.pipeline = gst_pipeline_new("pipeline");
   if (!gst_.pipeline) {
     std::cerr << "Failed to create a pipeline" << std::endl;
     return false;
   }
-  gst_.playbin = gst_element_factory_make("playbin3", "playbin");
-  if (!gst_.playbin) {
+  gst_.video_src = gst_element_factory_make(video_src.c_str(), "src");
+  if (!gst_.video_src) {
     std::cerr << "Failed to create a source" << std::endl;
     return false;
   }
@@ -377,10 +387,13 @@ bool GstVideoPlayer::CreatePipeline() {
     std::cerr << "Failed to create a videosink" << std::endl;
     return false;
   }
-  gst_.output = gst_bin_new("output");
-  if (!gst_.output) {
-    std::cerr << "Failed to create an output" << std::endl;
-    return false;
+  if (video_src == "playbin")
+  {
+    gst_.output = gst_bin_new("output");
+    if (!gst_.output) {
+      std::cerr << "Failed to create an output" << std::endl;
+      return false;
+    }
   }
   gst_.bus = gst_pipeline_get_bus(GST_PIPELINE(gst_.pipeline));
   if (!gst_.bus) {
@@ -395,29 +408,37 @@ bool GstVideoPlayer::CreatePipeline() {
   g_object_set(G_OBJECT(gst_.video_convert), "add-borders", TRUE, NULL);
   g_signal_connect(G_OBJECT(gst_.video_sink), "handoff",
                    G_CALLBACK(HandoffHandler), this);
-  gst_bin_add_many(GST_BIN(gst_.output), gst_.video_convert, gst_.caps_filter, gst_.video_sink,
-                   NULL);
-
+  if (video_src == "playbin")
+    gst_bin_add_many(GST_BIN(gst_.output), gst_.video_convert, gst_.caps_filter, gst_.video_sink,
+                    NULL);
+  else
+    gst_bin_add_many(GST_BIN(gst_.pipeline), gst_.video_src, gst_.video_convert, gst_.caps_filter, gst_.video_sink,
+                    NULL);
   // Adds caps to the converter to convert the color format to RGBA.
   auto* caps = gst_caps_from_string(capsStr.c_str());
   g_object_set (G_OBJECT (gst_.caps_filter), "caps", caps, NULL);
-  gst_element_link_many(gst_.video_convert, gst_.caps_filter, gst_.video_sink, NULL);
-
-  auto* sinkpad = gst_element_get_static_pad(gst_.video_convert, "sink");
-  auto* ghost_sinkpad = gst_ghost_pad_new("sink", sinkpad);
-  gst_pad_set_active(ghost_sinkpad, TRUE);
-  gst_element_add_pad(gst_.output, ghost_sinkpad);
+  gst_element_link_many(gst_.video_src, gst_.video_convert, gst_.caps_filter, gst_.video_sink, NULL);
 
   // Sets properties to playbin.
-  g_object_set(gst_.playbin, "uri", uri_.c_str(), NULL);
-  g_object_set(gst_.playbin, "video-sink", gst_.output, NULL);
-  gst_bin_add_many(GST_BIN(gst_.pipeline), gst_.playbin, NULL);
+  if (video_src == "playbin")
+  {
+    auto* sinkpad = gst_element_get_static_pad(gst_.video_convert, "sink");
+    auto* ghost_sinkpad = gst_ghost_pad_new("sink", sinkpad);
+    gst_pad_set_active(ghost_sinkpad, TRUE);
+    gst_element_add_pad(gst_.output, ghost_sinkpad);
+
+    g_object_set(gst_.video_src, "uri", uri_.c_str(), NULL);
+    g_object_set(gst_.video_src, "video-sink", gst_.output, NULL);
+    gst_bin_add_many(GST_BIN(gst_.pipeline), gst_.video_src, NULL);
+  }
+  else
+    g_object_set(gst_.video_src, "device", uri_.c_str(), NULL);
 
   return true;
 }
 
 void GstVideoPlayer::Preroll() {
-  if (!gst_.playbin) {
+  if (!gst_.video_src) {
     return;
   }
 
@@ -462,8 +483,8 @@ void GstVideoPlayer::DestroyPipeline() {
     gst_.pipeline = nullptr;
   }
 
-  if (gst_.playbin) {
-    gst_.playbin = nullptr;
+  if (gst_.video_src) {
+    gst_.video_src = nullptr;
   }
 
   if (gst_.output) {
