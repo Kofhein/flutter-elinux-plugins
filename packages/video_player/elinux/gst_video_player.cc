@@ -29,6 +29,8 @@ GstVideoPlayer::GstVideoPlayer(
     //camera handling
     uri_ = uri;
     is_stream_ = true;
+    width_ = 1920;
+    height_ = 1080;
   }
 
   if (!CreatePipeline()) {
