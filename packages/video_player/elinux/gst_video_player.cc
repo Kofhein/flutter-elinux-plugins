@@ -28,7 +28,7 @@ GstVideoPlayer::GstVideoPlayer(
   {
     //camera handling
     uri_ = uri;
-    is_stream_ = true;
+    is_camera_ = true;
     width_ = 1920;
     height_ = 1080;
   }
@@ -132,7 +132,7 @@ bool GstVideoPlayer::SetVolume(double volume) {
 }
 
 bool GstVideoPlayer::SetPlaybackRate(double rate) {
-  if (is_stream_)
+  if (is_stream_ || is_camera_)
     return false;
 
   if (!gst_.video_src) {
@@ -166,7 +166,7 @@ bool GstVideoPlayer::SetPlaybackRate(double rate) {
 }
 
 bool GstVideoPlayer::SetSeek(int64_t position) {
-  if (is_stream_)
+  if (is_stream_ || is_camera_)
     return false;
 
   auto nanosecond = position * 1000 * 1000;
@@ -182,7 +182,7 @@ bool GstVideoPlayer::SetSeek(int64_t position) {
 }
 
 int64_t GstVideoPlayer::GetDuration() {
-  if (is_stream_)
+  if (is_stream_ || is_camera_)
     return 0;
 
   GstFormat fmt = GST_FORMAT_TIME;
@@ -198,7 +198,7 @@ int64_t GstVideoPlayer::GetDuration() {
 int64_t GstVideoPlayer::GetCurrentPosition() {
   gint64 position = 0;
 
-  if (is_stream_)
+  if (is_stream_ || is_camera_)
     return position;
 
   // Sometimes we get an error when playing streaming videos.
@@ -361,7 +361,7 @@ bool GstVideoPlayer::CreatePipeline() {
     IncreasePluginRank("vavp8dec");
     IncreasePluginRank("vavp9dec");
   }
-  if (true)
+  if (is_camera_)
     video_src = "v4l2src";
 
   gst_.pipeline = gst_pipeline_new("pipeline");
@@ -389,7 +389,7 @@ bool GstVideoPlayer::CreatePipeline() {
     std::cerr << "Failed to create a videosink" << std::endl;
     return false;
   }
-  if (video_src == "playbin")
+  if (video_src == "playbin3")
   {
     gst_.output = gst_bin_new("output");
     if (!gst_.output) {
@@ -410,7 +410,7 @@ bool GstVideoPlayer::CreatePipeline() {
   g_object_set(G_OBJECT(gst_.video_convert), "add-borders", TRUE, NULL);
   g_signal_connect(G_OBJECT(gst_.video_sink), "handoff",
                    G_CALLBACK(HandoffHandler), this);
-  if (video_src == "playbin")
+  if (video_src == "playbin3")
     gst_bin_add_many(GST_BIN(gst_.output), gst_.video_convert, gst_.caps_filter, gst_.video_sink,
                     NULL);
   else
@@ -422,7 +422,7 @@ bool GstVideoPlayer::CreatePipeline() {
   gst_element_link_many(gst_.video_src, gst_.video_convert, gst_.caps_filter, gst_.video_sink, NULL);
 
   // Sets properties to playbin.
-  if (video_src == "playbin")
+  if (video_src == "playbin3")
   {
     auto* sinkpad = gst_element_get_static_pad(gst_.video_convert, "sink");
     auto* ghost_sinkpad = gst_ghost_pad_new("sink", sinkpad);

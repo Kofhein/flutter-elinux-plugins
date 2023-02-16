@@ -77,6 +77,7 @@ class GstVideoPlayer {
   double playback_rate_ = 1.0;
   bool mute_ = false;
   bool is_stream_ = false;
+  bool is_camera_ = false;
   bool auto_repeat_ = false;
   bool is_completed_ = false;
   std::mutex mutex_event_completed_;
