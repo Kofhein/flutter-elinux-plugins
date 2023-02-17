@@ -102,7 +102,6 @@ void GstVideoPlayer::CheckInconsistency(std::string const & uri)
         std::cerr << "failed to allocated memory for AVCodecContext" << std::endl;
         return;
       }
-
       if ( avcodec_parameters_to_context(pCodecContext, pLocalCodecParameters) < 0)
       {
         std::cerr << "failed to copy codec params to codec context" << std::endl;
@@ -121,8 +120,7 @@ void GstVideoPlayer::CheckInconsistency(std::string const & uri)
         return;
       }
 
-      if (av_read_frame(pFormatContext, pPacket) >= 0)
-        avcodec_send_packet(pCodecContext, pPacket);
+      av_read_frame(pFormatContext, pPacket);
 
       if (std::find(resolution_values_.begin(),
                     resolution_values_.end(),
@@ -130,7 +128,8 @@ void GstVideoPlayer::CheckInconsistency(std::string const & uri)
           ||
           std::find(resolution_values_.begin(),
           resolution_values_.end(),
-          pCodecContext->coded_height) == resolution_values_.end())
+          pCodecContext->coded_height) == resolution_values_.end()
+          || (avcodec_send_packet(pCodecContext, pPacket) < 0))
           {
             is_inconsistent_ = true;
             if (pCodecContext->coded_height > pCodecContext->coded_width)
