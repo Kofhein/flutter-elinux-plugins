@@ -8,6 +8,8 @@ set(PLUGIN_NAME "video_player_elinux_plugin")
 
 find_package(PkgConfig)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
+pkg_check_modules(LIBAVFMT REQUIRED libavformat)
+pkg_check_modules(LIBAVCDC REQUIRED libavcodec)
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0)
 
 add_library(${PLUGIN_NAME} SHARED
@@ -25,12 +27,16 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin)
 target_include_directories(${PLUGIN_NAME}
   PRIVATE
     ${GLIB_INCLUDE_DIRS}
+    ${LIBAVFMT_INCLUDE_DIRS}
+    ${LIBAVCDC_INCLUDE_DIRS}
     ${GSTREAMER_INCLUDE_DIRS}
 )
 
 target_link_libraries(${PLUGIN_NAME}
   PRIVATE
     ${GLIB_LIBRARIES}
+    ${LIBAVFMT_LIBRARIES}
+    ${LIBAVCDC_LIBRARIES}
     ${GSTREAMER_LIBRARIES}
 )
 

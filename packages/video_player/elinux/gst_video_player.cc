@@ -4,6 +4,11 @@
 
 #include "gst_video_player.h"
 
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+}
+
 #include <iostream>
 #include <unordered_map>
 #include <algorithm>
@@ -18,6 +23,8 @@ GstVideoPlayer::GstVideoPlayer(
   gst_.output = nullptr;
   gst_.bus = nullptr;
   gst_.buffer = nullptr;
+
+  CheckInconsistency(uri);
 
   if (!regex_match(uri, GstVideoPlayer::camera_path_regex_))
   {
@@ -58,6 +65,51 @@ GstVideoPlayer::~GstVideoPlayer() {
   Stop();
   DestroyPipeline();
 }
+
+void GstVideoPlayer::CheckInconsistency(std::string const & uri)
+{
+  AVFormatContext *pFormatContext = avformat_alloc_context();
+	avformat_open_input(&pFormatContext, uri.c_str(), NULL, NULL);
+
+  avformat_find_stream_info(pFormatContext,  NULL);
+  for (int i = 0; i < pFormatContext->nb_streams; i++)
+  {
+    AVCodecParameters *pLocalCodecParameters =  pFormatContext->streams[i]->codecpar;
+    if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO)
+    {
+      AVCodec *pLocalCodec = avcodec_find_decoder(pLocalCodecParameters->codec_id);
+
+      AVCodecContext *pCodecContext = avcodec_alloc_context3(pLocalCodec);
+      avcodec_parameters_to_context(pCodecContext, pLocalCodecParameters);
+      avcodec_open2(pCodecContext, pLocalCodec, NULL);
+
+      AVPacket *pPacket = av_packet_alloc();
+      av_read_frame(pFormatContext, pPacket);
+      avcodec_send_packet(pCodecContext, pPacket);
+
+      if (std::find(resolution_values_.begin(),
+                    resolution_values_.end(),
+                    pCodecContext->coded_width) == resolution_values_.end()
+          ||
+          std::find(resolution_values_.begin(),
+          resolution_values_.end(),
+          pCodecContext->coded_height) == resolution_values_.end())
+          {
+            is_inconsistent_ = true;
+            if (pCodecContext->coded_height > pCodecContext->coded_width)
+              aspect_ratio_ = "16/9";
+            else
+              aspect_ratio_ = "9/16";
+          }
+
+        avformat_close_input(&pFormatContext);
+        av_packet_free(&pPacket);
+        avcodec_free_context(&pCodecContext);
+        break;
+    }
+  }
+}
+
 
 bool GstVideoPlayer::IsStreamUri(const std::string &uri) const
 {
@@ -344,6 +396,8 @@ bool GstVideoPlayer::CreatePipeline() {
   if ( CheckPluginAvailability("vapostproc") ){
     converter = "vapostproc";
     capsStr = "video/x-raw(memory:DMABuf),format=RGBA";
+    if (is_inconsistent_)
+      capsStr += ", pixel-aspect-ratio=" + aspect_ratio_;
 
     if (is_stream_ && SetStreamDataFromUrl(uri_))
     {
