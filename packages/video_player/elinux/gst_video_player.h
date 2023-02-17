@@ -89,7 +89,7 @@ class GstVideoPlayer {
   static inline auto const stream_type_regex_ {std::regex("((?:rtp|rtmp|rtcp|rtsp|udp)://.*)", std::regex::icase)};
   static inline auto const stream_ext_regex_ {std::regex("((?:http|https)://.*(?:.m3u8|.flv))", std::regex::icase)};
   static inline auto const camera_path_regex_ {std::regex("(/dev/video[0-9])", std::regex::icase)};
-  const std::vector < int > resolution_values_ {1080,1920,2160,3840};
+  const std::vector < int > resolution_values_ {720,1080,1280,1920,2160,3840};
 };
 
 #endif  // PACKAGES_VIDEO_PLAYER_VIDEO_PLAYER_ELINUX_GST_VIDEO_PLAYER_H_
