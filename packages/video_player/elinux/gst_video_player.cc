@@ -122,14 +122,15 @@ void GstVideoPlayer::CheckInconsistency(std::string const & uri)
 
       av_read_frame(pFormatContext, pPacket);
 
-      if (std::find(resolution_values_.begin(),
+      if ((avcodec_send_packet(pCodecContext, pPacket) < 0)
+          ||
+          std::find(resolution_values_.begin(),
                     resolution_values_.end(),
                     pCodecContext->coded_width) == resolution_values_.end()
           ||
           std::find(resolution_values_.begin(),
           resolution_values_.end(),
-          pCodecContext->coded_height) == resolution_values_.end()
-          || (avcodec_send_packet(pCodecContext, pPacket) < 0))
+          pCodecContext->coded_height) == resolution_values_.end())
           {
             is_inconsistent_ = true;
             if (pCodecContext->coded_height > pCodecContext->coded_width)
