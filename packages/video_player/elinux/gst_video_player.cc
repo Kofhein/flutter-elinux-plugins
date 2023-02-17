@@ -69,23 +69,60 @@ GstVideoPlayer::~GstVideoPlayer() {
 void GstVideoPlayer::CheckInconsistency(std::string const & uri)
 {
   AVFormatContext *pFormatContext = avformat_alloc_context();
-	avformat_open_input(&pFormatContext, uri.c_str(), NULL, NULL);
+  if (!pFormatContext) {
+    std::cerr << "ERROR could not allocate memory for Format Context" << std::endl;
+    return;
+  }
 
-  avformat_find_stream_info(pFormatContext,  NULL);
+  if (avformat_open_input(&pFormatContext, uri.c_str(), NULL, NULL) != 0) {
+    std::cerr << "ERROR could not open the file" << std::endl;
+    return;
+  }
+
+  if (avformat_find_stream_info(pFormatContext,  NULL) < 0) {
+    std::cerr << "ERROR could not get the stream info" << std::endl;
+    return;
+  }
+
   for (int i = 0; i < pFormatContext->nb_streams; i++)
   {
     AVCodecParameters *pLocalCodecParameters =  pFormatContext->streams[i]->codecpar;
     if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO)
     {
       AVCodec *pLocalCodec = avcodec_find_decoder(pLocalCodecParameters->codec_id);
+      if (pLocalCodec==NULL) {
+        std::cerr << "ERROR unsupported codec!" << std::endl;
+        return;
+      }
 
       AVCodecContext *pCodecContext = avcodec_alloc_context3(pLocalCodec);
-      avcodec_parameters_to_context(pCodecContext, pLocalCodecParameters);
-      avcodec_open2(pCodecContext, pLocalCodec, NULL);
+
+      if (!pCodecContext)
+      {
+        std::cerr << "failed to allocated memory for AVCodecContext" << std::endl;
+        return;
+      }
+
+      if ( avcodec_parameters_to_context(pCodecContext, pLocalCodecParameters) < 0)
+      {
+        std::cerr << "failed to copy codec params to codec context" << std::endl;
+        return;
+      }
+      if(avcodec_open2(pCodecContext, pLocalCodec, NULL) < 0)
+      {
+        std::cerr << "failed to open codec through avcodec_open2" << std::endl;
+        return;
+      }
 
       AVPacket *pPacket = av_packet_alloc();
-      av_read_frame(pFormatContext, pPacket);
-      avcodec_send_packet(pCodecContext, pPacket);
+      if (!pPacket)
+      {
+        std::cerr << "failed to allocate memory for AVPacket" << std::endl;
+        return;
+      }
+
+      if (av_read_frame(pFormatContext, pPacket) >= 0)
+        avcodec_send_packet(pCodecContext, pPacket);
 
       if (std::find(resolution_values_.begin(),
                     resolution_values_.end(),
