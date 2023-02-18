@@ -24,12 +24,13 @@ GstVideoPlayer::GstVideoPlayer(
   gst_.bus = nullptr;
   gst_.buffer = nullptr;
 
-  CheckInconsistency(uri);
-
   if (!regex_match(uri, GstVideoPlayer::camera_path_regex_))
   {
     uri_ = ParseUri(uri);
     is_stream_ = IsStreamUri(uri_);
+
+    if (!is_stream_)
+      CheckInconsistency(uri);
   }
   else
   {
@@ -120,20 +121,24 @@ void GstVideoPlayer::CheckInconsistency(std::string const & uri)
         return;
       }
 
-      av_read_frame(pFormatContext, pPacket);
+      // Proper NAL unit handling, wait till normal frame.
+      do {
+        av_packet_unref(pPacket);
+        av_read_frame(pFormatContext, pPacket);
+      } while( avcodec_send_packet(pCodecContext, pPacket) < 0 );
 
-      if ((avcodec_send_packet(pCodecContext, pPacket) < 0)
-          ||
-          std::find(resolution_values_.begin(),
-                    resolution_values_.end(),
-                    pCodecContext->coded_width) == resolution_values_.end()
+      av_packet_unref(pPacket);
+
+      if (std::find(resolution_values_.begin(),
+          resolution_values_.end(),
+          pCodecContext->coded_width) == resolution_values_.end()
           ||
           std::find(resolution_values_.begin(),
           resolution_values_.end(),
           pCodecContext->coded_height) == resolution_values_.end())
           {
             is_inconsistent_ = true;
-            if (pCodecContext->coded_height > pCodecContext->coded_width)
+            if ( pCodecContext->coded_height > pCodecContext->coded_width )
               aspect_ratio_ = "16/9";
             else
               aspect_ratio_ = "9/16";
@@ -146,7 +151,6 @@ void GstVideoPlayer::CheckInconsistency(std::string const & uri)
     }
   }
 }
-
 
 bool GstVideoPlayer::IsStreamUri(const std::string &uri) const
 {
