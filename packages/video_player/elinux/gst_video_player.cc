@@ -88,67 +88,72 @@ void GstVideoPlayer::CheckInconsistency(std::string const & uri)
   for (int i = 0; i < pFormatContext->nb_streams; i++)
   {
     AVCodecParameters *pLocalCodecParameters =  pFormatContext->streams[i]->codecpar;
-    if (pLocalCodecParameters->codec_type == AVMEDIA_TYPE_VIDEO)
-    {
-      AVCodec *pLocalCodec = avcodec_find_decoder(pLocalCodecParameters->codec_id);
-      if (pLocalCodec==NULL) {
-        std::cerr << "ERROR unsupported codec!" << std::endl;
-        return;
-      }
-
-      AVCodecContext *pCodecContext = avcodec_alloc_context3(pLocalCodec);
-
-      if (!pCodecContext)
-      {
-        std::cerr << "failed to allocated memory for AVCodecContext" << std::endl;
-        return;
-      }
-      if ( avcodec_parameters_to_context(pCodecContext, pLocalCodecParameters) < 0)
-      {
-        std::cerr << "failed to copy codec params to codec context" << std::endl;
-        return;
-      }
-      if(avcodec_open2(pCodecContext, pLocalCodec, NULL) < 0)
-      {
-        std::cerr << "failed to open codec through avcodec_open2" << std::endl;
-        return;
-      }
-
-      AVPacket *pPacket = av_packet_alloc();
-      if (!pPacket)
-      {
-        std::cerr << "failed to allocate memory for AVPacket" << std::endl;
-        return;
-      }
-
-      // Proper NAL unit handling, wait till normal frame.
-      do {
-        av_packet_unref(pPacket);
-        av_read_frame(pFormatContext, pPacket);
-      } while( avcodec_send_packet(pCodecContext, pPacket) < 0 );
-
-      av_packet_unref(pPacket);
-
-      if (std::find(resolution_values_.begin(),
-          resolution_values_.end(),
-          pCodecContext->coded_width) == resolution_values_.end()
-          ||
-          std::find(resolution_values_.begin(),
-          resolution_values_.end(),
-          pCodecContext->coded_height) == resolution_values_.end())
-          {
-            is_inconsistent_ = true;
-            if ( pCodecContext->coded_height > pCodecContext->coded_width )
-              aspect_ratio_ = "16/9";
-            else
-              aspect_ratio_ = "9/16";
-          }
-
-        avformat_close_input(&pFormatContext);
-        av_packet_free(&pPacket);
-        avcodec_free_context(&pCodecContext);
-        break;
+    if (pLocalCodecParameters->codec_type != AVMEDIA_TYPE_VIDEO)
+      continue;
+    AVCodec *pLocalCodec = avcodec_find_decoder(pLocalCodecParameters->codec_id);
+    if (pLocalCodec==NULL) {
+      std::cerr << "ERROR unsupported codec!" << std::endl;
+      return;
     }
+
+    AVCodecContext *pCodecContext = avcodec_alloc_context3(pLocalCodec);
+
+    if (!pCodecContext)
+    {
+      std::cerr << "failed to allocated memory for AVCodecContext" << std::endl;
+      return;
+    }
+    if ( avcodec_parameters_to_context(pCodecContext, pLocalCodecParameters) < 0)
+    {
+      std::cerr << "failed to copy codec params to codec context" << std::endl;
+      return;
+    }
+    if(avcodec_open2(pCodecContext, pLocalCodec, NULL) < 0)
+    {
+      std::cerr << "failed to open codec through avcodec_open2" << std::endl;
+      return;
+    }
+
+    if (pCodecContext->width > pCodecContext->height)
+    {
+      avcodec_free_context(&pCodecContext);
+      return;
+    }
+
+    AVPacket *pPacket = av_packet_alloc();
+    if (!pPacket)
+    {
+      std::cerr << "failed to allocate memory for AVPacket" << std::endl;
+      return;
+    }
+
+    // Proper NAL unit handling, wait till normal frame.
+    do {
+      av_packet_unref(pPacket);
+      av_read_frame(pFormatContext, pPacket);
+    } while( avcodec_send_packet(pCodecContext, pPacket) < 0 );
+
+    av_packet_unref(pPacket);
+
+    if (std::find(resolution_values_.begin(),
+        resolution_values_.end(),
+        pCodecContext->coded_width) == resolution_values_.end()
+        ||
+        std::find(resolution_values_.begin(),
+        resolution_values_.end(),
+        pCodecContext->coded_height) == resolution_values_.end())
+    {
+      is_inconsistent_ = true;
+      if ( pCodecContext->coded_height > pCodecContext->coded_width )
+        aspect_ratio_ = "16/9";
+      else
+        aspect_ratio_ = "9/16";
+    }
+
+    avformat_close_input(&pFormatContext);
+    av_packet_free(&pPacket);
+    avcodec_free_context(&pCodecContext);
+    break;
   }
 }
 
