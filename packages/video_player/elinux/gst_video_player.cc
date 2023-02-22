@@ -144,10 +144,13 @@ void GstVideoPlayer::CheckInconsistency(std::string const & uri)
         pCodecContext->coded_height) == resolution_values_.end())
     {
       is_inconsistent_ = true;
-      if ( pCodecContext->coded_height > pCodecContext->coded_width )
+      auto buf_width = pCodecContext->coded_width;
+      if ( buf_width == 1088 )
         aspect_ratio_ = "10070/10000";
+      else if ( buf_width == 2176 )
+        aspect_ratio_ = "10072/10000";
       else
-        aspect_ratio_ = "9/16";
+        aspect_ratio_ = "16/15";
     }
 
     avformat_close_input(&pFormatContext);
