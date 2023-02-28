@@ -42,6 +42,8 @@ class GstVideoPlayer {
   struct GstVideoElements {
     GstElement* pipeline;
     GstElement* video_src;
+    GstElement* camera_caps;
+    GstElement* camera_dec;
     GstElement* video_convert;
     GstElement* caps_filter;
     GstElement* video_sink;

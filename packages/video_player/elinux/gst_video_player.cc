@@ -467,8 +467,24 @@ bool GstVideoPlayer::CreatePipeline() {
   }
 
   if (is_camera_)
+  {
     video_src = "v4l2src";
+    std::string cameraCaps {"image/jpeg, framerate=30/1"};
+    gst_.camera_caps = gst_element_factory_make("capsfilter", "camera_filter");
+    if (!gst_.camera_caps) {
+      std::cerr << "Failed to create a camera_caps" << std::endl;
+      return false;
+    }
 
+    gst_.camera_dec = gst_element_factory_make("jpegdec", "dec");
+    if (!gst_.camera_dec) {
+      std::cerr << "Failed to create a camera_dec" << std::endl;
+      return false;
+    }
+
+    auto* camera_caps = gst_caps_from_string(cameraCaps.c_str());
+    g_object_set (G_OBJECT (gst_.camera_caps), "caps", camera_caps, NULL);
+  }
   gst_.pipeline = gst_pipeline_new("pipeline");
   if (!gst_.pipeline) {
     std::cerr << "Failed to create a pipeline" << std::endl;
@@ -527,7 +543,7 @@ bool GstVideoPlayer::CreatePipeline() {
     gst_bin_add_many(GST_BIN(gst_.output), gst_.video_convert, gst_.caps_filter, gst_.video_sink,
                     NULL);
   else
-    gst_bin_add_many(GST_BIN(gst_.pipeline), gst_.video_src, gst_.video_convert, gst_.caps_filter, gst_.video_sink,
+    gst_bin_add_many(GST_BIN(gst_.pipeline), gst_.video_src, gst_.camera_caps, gst_.camera_dec, gst_.video_convert, gst_.caps_filter, gst_.video_sink,
                     NULL);
 
   // Adds caps to the converter to convert the color format to RGBA.
@@ -550,7 +566,7 @@ bool GstVideoPlayer::CreatePipeline() {
   }
   else
   {
-    gst_element_link_many(gst_.video_src, gst_.video_convert, gst_.caps_filter, gst_.video_sink, NULL);
+    gst_element_link_many(gst_.video_src, gst_.camera_caps, gst_.camera_dec, gst_.video_convert, gst_.caps_filter, gst_.video_sink, NULL);
 
     g_object_set(gst_.video_src, "device", uri_.c_str(), NULL);
   }
